@@ -1,2 +1,7 @@
-# java-explore-with-me
-Template repository for ExploreWithMe project.
+# Explore With Me
+--
+### Pull Request:
+
+
+---
+Designed by Tolstykh Aleksandr
