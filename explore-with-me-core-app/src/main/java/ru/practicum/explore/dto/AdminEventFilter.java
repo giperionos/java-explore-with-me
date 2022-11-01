@@ -12,9 +12,9 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class AdminEventFilter {
-    private Long[] usersIds;
+    private List<Long> usersIds;
     private List<EventState> states;
-    private Long[] categoriesIds;
+    private List<Long> categoriesIds;
     private String rangeStartEncoded;
     private String rangeEndEncoded;
     private Integer from;

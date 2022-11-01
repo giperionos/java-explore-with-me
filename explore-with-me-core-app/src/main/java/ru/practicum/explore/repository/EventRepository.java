@@ -8,5 +8,5 @@ import java.util.List;
 
 public interface EventRepository extends JpaRepository<Event, Long>, QuerydslPredicateExecutor<Event> {
 
-    List<Event> findByCategory_Id(Long categoryId);
+    List<Event> findByCategoryId(Long categoryId);
 }

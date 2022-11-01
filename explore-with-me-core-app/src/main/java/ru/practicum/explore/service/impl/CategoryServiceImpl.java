@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.CategoryDto;
 import ru.practicum.explore.dto.NewCategoryDto;
 import ru.practicum.explore.model.Category;
@@ -27,6 +28,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final EventRepository eventRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<CategoryDto> getAllCategories(Integer from, Integer size) {
         return categoryRepository.findAll(PageRequest.of(from / size, size, Sort.by("id").ascending()))
                 .stream()
@@ -35,17 +37,20 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public CategoryDto getCategoryById(Long catId) {
         return CategoryMapper.toCategoryDto(findCategoryByIdOrThrowException(catId));
     }
 
     @Override
+    @Transactional
     public CategoryDto addNewCategory(NewCategoryDto newCategoryDto) {
         Category categoryForSave = CategoryMapper.toCategory(newCategoryDto);
         return CategoryMapper.toCategoryDto(categoryRepository.save(categoryForSave));
     }
 
     @Override
+    @Transactional
     public CategoryDto updateCategory(CategoryDto categoryDto) {
         //сначала нужно убедиться, что категория, которая обновляется вообще есть
         Category categoryForUpdate = findCategoryByIdOrThrowException(categoryDto.getId());
@@ -58,26 +63,21 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional
     public void deleteCategory(Long categoryId) {
         //сначала нужно убедиться, что категория, которая обновляется вообще есть
         Category categoryForDelete = findCategoryByIdOrThrowException(categoryId);
 
         //с категорией не должно быть связано ни одного события, иначе ошибка
-        if (!eventRepository.findByCategory_Id(categoryId).isEmpty()) {
+        if (!eventRepository.findByCategoryId(categoryId).isEmpty()) {
             throw new CategoryRestrictDeleteException(categoryId);
         }
 
         categoryRepository.delete(categoryForDelete);
     }
 
-    @Override
-    public Category findCategoryByIdOrThrowException(Long catId) {
+    private Category findCategoryByIdOrThrowException(Long catId) {
         return categoryRepository.findById(catId)
                 .orElseThrow(() -> new CategoryNotFoundException(catId));
-    }
-
-    @Override
-    public List<Category> getCategoryByIds(List<Long> ids) {
-        return categoryRepository.findAllById(ids);
     }
 }

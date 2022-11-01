@@ -5,13 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class UserEventFilter {
     private String textSearch;
-    private Long[] categoriesIds;
+    private List<Long> categoriesIds;
     private Boolean paid;
     private String rangeStartEncoded;
     private String rangeEndEncoded;

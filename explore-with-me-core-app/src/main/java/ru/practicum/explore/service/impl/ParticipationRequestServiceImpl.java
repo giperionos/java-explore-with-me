@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.EventState;
 import ru.practicum.explore.dto.ParticipationRequestDto;
 import ru.practicum.explore.dto.RequestStatus;
@@ -13,10 +14,10 @@ import ru.practicum.explore.model.Event;
 import ru.practicum.explore.model.ParticipationRequest;
 import ru.practicum.explore.model.QParticipationRequest;
 import ru.practicum.explore.model.User;
+import ru.practicum.explore.repository.EventRepository;
 import ru.practicum.explore.repository.ParticipationRequestRepository;
-import ru.practicum.explore.service.EventService;
+import ru.practicum.explore.repository.UserRepository;
 import ru.practicum.explore.service.ParticipationRequestService;
-import ru.practicum.explore.service.UserService;
 import ru.practicum.explore.service.exceptions.*;
 import ru.practicum.explore.service.mapper.RequestMapper;
 
@@ -29,14 +30,15 @@ import java.util.stream.Collectors;
 public class ParticipationRequestServiceImpl implements ParticipationRequestService {
 
     private final ParticipationRequestRepository repository;
-    private final UserService userService;
-    private final EventService eventService;
+    private final UserRepository userRepository;
+    private final EventRepository eventRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<ParticipationRequestDto> getUserRequests(Long userId) {
         //Получение информации о заявках текущего пользователя на участие в чужих событиях
         //сначала убедиться, что такой пользователь вообще есть
-        userService.findUserByIdOrThrowException(userId);
+        findUserByIdOrThrowException(userId);
 
         //поиск по условию
         Predicate byRequesterId = QParticipationRequest.participationRequest.requester.id.eq(userId);
@@ -47,6 +49,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
+    @Transactional
     public ParticipationRequestDto addParticipationRequestByUserForEvent(Long userId, Long eventId) {
         /**
          * нельзя добавить повторный запрос
@@ -57,10 +60,10 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
          */
 
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //Если пользователь пытается добавить запрос на участие в своем же событии
         if (user.getId().longValue() == event.getInitiator().getId().longValue()) {
@@ -109,10 +112,11 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
+    @Transactional
     public ParticipationRequestDto cancelParticipationRequestByUser(Long userId, Long requestId) {
         //Отмена своего запроса на участие в событии
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такой запрос есть для данного пользователя
         ParticipationRequest canceledRequest = findRequestByIdAndRequesterOrThrowException(requestId, user);
@@ -124,14 +128,15 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ParticipationRequestDto> getParticipationRequestsInEventOfCurrentUser(Long userId, Long eventId) {
         //Получение информации о запросах на участие в событии текущего пользователя
 
         //убедиться, что такой пользователь вообще есть
-        User initiator = userService.findUserByIdOrThrowException(userId);
+        User initiator = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //убедиться, что данное событие принадлежит этому пользователю
         if (initiator.getId().longValue() != event.getInitiator().getId().longValue()) {
@@ -147,6 +152,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
+    @Transactional
     public ParticipationRequestDto confirmParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId) {
         /**
          * если для события лимит заявок равен 0 или отключена пре-модерация заявок, то подтверждение заявок не требуется
@@ -155,10 +161,10 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
          */
 
         //убедиться, что такой пользователь вообще есть
-        User initiator = userService.findUserByIdOrThrowException(userId);
+        User initiator = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //убедиться, чта такой запрос есть
         ParticipationRequest request = findRequestByIdOrThrowException(requestId);
@@ -208,13 +214,14 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
+    @Transactional
     public ParticipationRequestDto rejectParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId) {
 
         //убедиться, что такой пользователь вообще есть
-        User initiator = userService.findUserByIdOrThrowException(userId);
+        User initiator = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //убедиться, чта такой запрос есть
         ParticipationRequest request = findRequestByIdOrThrowException(requestId);
@@ -230,8 +237,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         return RequestMapper.toParticipationRequestDto(repository.save(request));
     }
 
-    @Override
-    public ParticipationRequest findRequestByIdAndRequesterOrThrowException(Long requestId, User requester) {
+    private ParticipationRequest findRequestByIdAndRequesterOrThrowException(Long requestId, User requester) {
 
         Predicate byUserId = QParticipationRequest.participationRequest.requester.id.eq(requester.getId());
         Predicate byRequestId = QParticipationRequest.participationRequest.id.eq(requestId);
@@ -251,9 +257,18 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
          return requests.get(0);
     }
 
-    @Override
-    public ParticipationRequest findRequestByIdOrThrowException(Long requestId) {
+    private ParticipationRequest findRequestByIdOrThrowException(Long requestId) {
         return repository.findById(requestId)
                 .orElseThrow(() -> new ParticipationRequestNotFoundException(requestId));
+    }
+
+    private User findUserByIdOrThrowException(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+    }
+
+    private Event findEventByIdOrThrowException(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 }

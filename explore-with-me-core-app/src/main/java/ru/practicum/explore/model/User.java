@@ -7,7 +7,8 @@ import javax.persistence.*;
 
 @Entity
 @Table(name = "users")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class User {
@@ -20,6 +21,6 @@ public class User {
     @Column(name = "user_name", nullable = false)
     private String name;
 
-    @Column(name = "email", nullable = false, length = 254)
+    @Column(nullable = false, length = 254)
     private String email;
 }

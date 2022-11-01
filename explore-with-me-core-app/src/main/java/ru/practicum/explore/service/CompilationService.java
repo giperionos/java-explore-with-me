@@ -2,7 +2,6 @@ package ru.practicum.explore.service;
 
 import ru.practicum.explore.dto.CompilationDto;
 import ru.practicum.explore.dto.NewCompilationDto;
-import ru.practicum.explore.model.Compilation;
 
 import java.util.List;
 
@@ -22,6 +21,4 @@ public interface CompilationService {
     void unpinCompilation(Long compId);
 
     void pinCompilation(Long compId);
-
-    Compilation findCompilationByIdOrThrowException(Long compId);
 }

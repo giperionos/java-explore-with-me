@@ -1,11 +1,14 @@
 package ru.practicum.explore.service.mapper;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import ru.practicum.explore.dto.*;
 import ru.practicum.explore.model.Category;
 import ru.practicum.explore.model.Event;
 import ru.practicum.explore.model.User;
 
-public class EventMapper {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class EventMapper {
 
     public static Event toEvent(NewEventDto newEventDto, Category category, User initiator) {
         Event event = new Event();

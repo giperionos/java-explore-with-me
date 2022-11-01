@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.NewUserRequest;
 import ru.practicum.explore.dto.UserDto;
 import ru.practicum.explore.dto.UserFilter;
@@ -16,7 +17,6 @@ import ru.practicum.explore.service.UserService;
 import ru.practicum.explore.service.exceptions.UserNotFoundException;
 import ru.practicum.explore.service.mapper.UserMapper;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,21 +28,23 @@ public class UserServiceImpl implements UserService {
     private final UserRepository repository;
 
     @Override
+    @Transactional
     public UserDto addNewUser(NewUserRequest newUserRequest) {
         User userForSave = UserMapper.toUser(newUserRequest);
         return UserMapper.toUserDto(repository.save(userForSave));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<UserDto> getUsersByFilter(UserFilter filter) {
 
         int page = filter.getFrom() / filter.getSize();
         final PageRequest pageRequest = PageRequest.of(page, filter.getSize(), Sort.by("id").ascending());
 
         //если есть данные для поиска по id
-        if (filter.getUserIds() != null && filter.getUserIds().length > 0) {
+        if (filter.getUserIds() != null && filter.getUserIds().size() > 0) {
 
-            Predicate finalPredicate = QUser.user.id.in(Arrays.asList(filter.getUserIds()));
+            Predicate finalPredicate = QUser.user.id.in(filter.getUserIds());
 
             return repository.findAll(finalPredicate, pageRequest)
                     .stream()
@@ -58,15 +60,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void deleteUserById(Long userId) {
-        User userForDelete = findUserByIdOrThrowException(userId);
+        User userForDelete = repository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         repository.delete(userForDelete);
-    }
-
-    @Override
-    public User findUserByIdOrThrowException(Long userId) {
-        return repository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
     }
 }

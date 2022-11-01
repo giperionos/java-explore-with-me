@@ -1,8 +1,6 @@
 package ru.practicum.explore.service;
 
 import ru.practicum.explore.dto.ParticipationRequestDto;
-import ru.practicum.explore.model.ParticipationRequest;
-import ru.practicum.explore.model.User;
 
 import java.util.List;
 
@@ -18,8 +16,4 @@ public interface ParticipationRequestService {
     ParticipationRequestDto confirmParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId);
 
     ParticipationRequestDto rejectParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId);
-
-    ParticipationRequest findRequestByIdAndRequesterOrThrowException(Long requestId, User user);
-
-    ParticipationRequest findRequestByIdOrThrowException(Long requestId);
 }

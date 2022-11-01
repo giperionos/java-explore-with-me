@@ -1,10 +1,13 @@
 package ru.practicum.explore.service.mapper;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import ru.practicum.explore.dto.CategoryDto;
 import ru.practicum.explore.dto.NewCategoryDto;
 import ru.practicum.explore.model.Category;
 
-public class CategoryMapper {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class CategoryMapper {
 
     public static CategoryDto toCategoryDto(Category category) {
         return new CategoryDto(category.getId(), category.getName());

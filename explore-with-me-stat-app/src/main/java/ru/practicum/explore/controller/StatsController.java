@@ -10,7 +10,6 @@ import ru.practicum.explore.dto.EndpointViewDto;
 import ru.practicum.explore.validator.StartDateBeforeEndDateValidator;
 import ru.practicum.explore.service.StatsService;
 
-import java.util.Arrays;
 import java.util.List;
 
 @RestController
@@ -31,11 +30,11 @@ public class StatsController {
     public List<EndpointViewDto> getEndpointStatsByParams(
             @RequestParam(name = "start") String encodedStart,
             @RequestParam(name = "end") String encodedEnd,
-            @RequestParam(name = "uris", required = false) String[] uriArray,
+            @RequestParam(name = "uris", required = false) List<String> uriArray,
             @RequestParam(name = "unique", required = false) Boolean unique) {
 
         log.info("Get GET Request /stats for params: {}, {}, {}, {}", encodedStart, encodedEnd, uriArray, unique);
-        EndpointViewParamsHelper params = EndpointViewParamsHelper.ofEncodedValues(encodedStart, encodedEnd, Arrays.asList(uriArray), unique);
+        EndpointViewParamsHelper params = EndpointViewParamsHelper.ofEncodedValues(encodedStart, encodedEnd, uriArray, unique);
         StartDateBeforeEndDateValidator.validate(params.getStart(), params.getEnd());
         return service.getEndpointStatsByParams(params);
     }

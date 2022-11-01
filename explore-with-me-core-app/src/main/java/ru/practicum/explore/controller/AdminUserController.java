@@ -28,7 +28,7 @@ public class AdminUserController {
 
     @GetMapping
     public List<UserDto> getUsersByParams(
-            @RequestParam(name = "ids", required = false) Long[] usersIds,
+            @RequestParam(name = "ids", required = false) List<Long> usersIds,
             @RequestParam(name = "from", defaultValue = "0")  Integer from,
             @RequestParam(name = "size", defaultValue = "10")  Integer size) {
 

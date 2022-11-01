@@ -8,16 +8,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.EndpointViewParamsHelper;
 import ru.practicum.explore.StatsClientService;
 import ru.practicum.explore.config.Config;
 import ru.practicum.explore.dto.*;
 import ru.practicum.explore.model.*;
+import ru.practicum.explore.repository.CategoryRepository;
 import ru.practicum.explore.repository.EventRepository;
 import ru.practicum.explore.repository.ParticipationRequestRepository;
-import ru.practicum.explore.service.CategoryService;
+import ru.practicum.explore.repository.UserRepository;
 import ru.practicum.explore.service.EventService;
-import ru.practicum.explore.service.UserService;
 import ru.practicum.explore.service.exceptions.*;
 import ru.practicum.explore.service.mapper.EventMapper;
 
@@ -26,7 +27,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,12 +39,13 @@ public class EventServiceImpl implements EventService {
     private static final String APP_NAME = "ExploreWithMeApp";
     private static final String URI_PATTERN = "/event/%s";
     private final StatsClientService statsClientService;
-    private final CategoryService categoryService;
-    private final UserService userService;
+    private final CategoryRepository categoryRepository;
+    private final UserRepository userRepository;
     private final ParticipationRequestRepository requestRepository;
     private final EventRepository eventRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<EventShortDto> getEventsByFilter(UserEventFilter filter, HttpServletRequest request) {
 
         /**
@@ -80,8 +81,8 @@ public class EventServiceImpl implements EventService {
         predicates.add(QEvent.event.eventDate.between(start,end));
 
         //если пришли конкретные категории
-        if (filter.getCategoriesIds().length > 0) {
-            predicates.add(QEvent.event.category.in(categoryService.getCategoryByIds(Arrays.asList(filter.getCategoriesIds()))));
+        if (filter.getCategoriesIds().size() > 0) {
+            predicates.add(QEvent.event.category.in(getCategoryByIds(filter.getCategoriesIds())));
         }
 
         //поиск только платных/бесплатных событий
@@ -161,6 +162,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public EventFullDto getEventWithFullInfoById(Long eventId, HttpServletRequest request) {
         //информация о событии должна включать в себя количество просмотров и количество подтвержденных запросов
 
@@ -189,10 +191,11 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<EventShortDto> getEventsAddedByCurrentUser(Long userId, Integer from, Integer size) {
         //Получение событий, добавленных текущим пользователем
         //сначала убедиться, что такой пользователь вообще есть
-        userService.findUserByIdOrThrowException(userId);
+        findUserByIdOrThrowException(userId);
 
         Predicate byUserId = QEvent.event.initiator.id.eq(userId);
         PageRequest pageRequest = PageRequest.of(from / size, size, Sort.by("id").ascending());
@@ -203,6 +206,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto updateEventAddedByCurrentUser(Long userId, UpdateEventRequestDto updateEventRequestDto) {
         //Изменение события добавленного текущим пользователем
 
@@ -213,7 +217,7 @@ public class EventServiceImpl implements EventService {
          */
 
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
         Event eventForUpdate = findEventByIdOrThrowException(updateEventRequestDto.getEventId());
@@ -239,7 +243,7 @@ public class EventServiceImpl implements EventService {
         if (updateEventRequestDto.getCategory() != null
                 && updateEventRequestDto.getCategory().longValue() != eventForUpdate.getCategory().getId().longValue()) {
             //проверить, что такая категория вообще есть
-            Category newCategory = categoryService.findCategoryByIdOrThrowException(updateEventRequestDto.getCategory());
+            Category newCategory = findCategoryByIdOrThrowException(updateEventRequestDto.getCategory());
 
             eventForUpdate.setCategory(newCategory);
         }
@@ -283,14 +287,15 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto addNewEventByCurrentUser(Long userId, NewEventDto newEventDto) {
         //Добавление нового события
 
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //получить категорию для этого мероприятия
-        Category category = categoryService.findCategoryByIdOrThrowException(newEventDto.getCategory());
+        Category category = findCategoryByIdOrThrowException(newEventDto.getCategory());
 
         //дата и время на которые намечено событие не может быть раньше, чем через два часа от текущего момента
         if (newEventDto.getEventDate().isBefore(LocalDateTime.now().plusHours(2L))) {
@@ -306,11 +311,12 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public EventFullDto getFullInfoEventAddedByCurrentUser(Long userId, Long eventId) {
         //Получение полной информации о событии добавленном текущим пользователем
 
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
         Event event = findEventByIdOrThrowException(eventId);
@@ -327,11 +333,12 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto cancelEventAddedByCurrentUser(Long userId, Long eventId) {
         //Отмена события добавленного текущим пользователем.
 
         //убедиться, что такой пользователь вообще есть
-        User user = userService.findUserByIdOrThrowException(userId);
+        User user = findUserByIdOrThrowException(userId);
 
         //убедиться, чта такое событие есть
         Event event = findEventByIdOrThrowException(eventId);
@@ -357,6 +364,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<EventFullDto> getEventsWithFullInfoByFilter(AdminEventFilter filter) {
         //возвращает полную информацию обо всех событиях подходящих под переданные условия
 
@@ -364,7 +372,7 @@ public class EventServiceImpl implements EventService {
         List<Predicate> predicates = new ArrayList<>();
 
         //если пришел список пользователей
-        if (filter.getUsersIds().length > 0) {
+        if (filter.getUsersIds().size() > 0) {
             predicates.add(QEvent.event.initiator.id.in(filter.getUsersIds()));
         }
 
@@ -374,8 +382,8 @@ public class EventServiceImpl implements EventService {
         }
 
         //если пришли конкретные категории
-        if (filter.getCategoriesIds().length > 0) {
-            predicates.add(QEvent.event.category.in(categoryService.getCategoryByIds(Arrays.asList(filter.getCategoriesIds()))));
+        if (filter.getCategoriesIds().size() > 0) {
+            predicates.add(QEvent.event.category.in(getCategoryByIds(filter.getCategoriesIds())));
         }
 
         //если пришла дата начала для выборки
@@ -409,6 +417,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto editEvent(Long eventId, AdminUpdateEventRequestDto adminUpdateEventRequestDto) {
         //Редактирование данных любого события администратором.
 
@@ -426,7 +435,7 @@ public class EventServiceImpl implements EventService {
         if (adminUpdateEventRequestDto.getCategory() != null
                 && adminUpdateEventRequestDto.getCategory().longValue() != eventForUpdate.getCategory().getId().longValue()) {
             //проверить, что такая категория вообще есть
-            Category newCategory = categoryService.findCategoryByIdOrThrowException(adminUpdateEventRequestDto.getCategory());
+            Category newCategory = findCategoryByIdOrThrowException(adminUpdateEventRequestDto.getCategory());
 
             eventForUpdate.setCategory(newCategory);
         }
@@ -479,6 +488,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto publishEvent(Long eventId) {
         /**
          * дата начала события должна быть не ранее чем за час от даты публикации.
@@ -507,6 +517,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     public EventFullDto rejectEvent(Long eventId) {
         //Отклонение события
 
@@ -525,12 +536,6 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public Event findEventByIdOrThrowException(Long eventId) {
-        return eventRepository.findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException(eventId));
-    }
-
-    @Override
     public EndpointHitDto doHitRequest(HttpServletRequest request) {
         EndpointHitDto endpointHitDto = new EndpointHitDto();
         endpointHitDto.setApp(APP_NAME);
@@ -540,16 +545,14 @@ public class EventServiceImpl implements EventService {
         return statsClientService.hit(endpointHitDto);
     }
 
-    @Override
-    public List<Event> findAllByIdsAndState(List<Long> eventIds, EventState state) {
+    private List<Event> findAllByIdsAndState(List<Long> eventIds, EventState state) {
         return  eventRepository.findAllById(eventIds)
                 .stream()
                 .filter((event) -> event.getState().equals(state))
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status) {
+    private List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status) {
         return requestRepository.findAllById(eventIds)
                 .stream()
                 .filter((participationRequest -> participationRequest.getStatus().equals(status)))
@@ -584,5 +587,24 @@ public class EventServiceImpl implements EventService {
         List<EndpointViewDto> eventStatistics = statsClientService.getEndpointStatsByParams(viewFilter.getQuery());
 
         return eventStatistics.size();
+    }
+
+    private List<Category> getCategoryByIds(List<Long> ids) {
+        return categoryRepository.findAllById(ids);
+    }
+
+    private Category findCategoryByIdOrThrowException(Long catId) {
+        return categoryRepository.findById(catId)
+                .orElseThrow(() -> new CategoryNotFoundException(catId));
+    }
+
+    private User findUserByIdOrThrowException(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+    }
+
+    private Event findEventByIdOrThrowException(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 }

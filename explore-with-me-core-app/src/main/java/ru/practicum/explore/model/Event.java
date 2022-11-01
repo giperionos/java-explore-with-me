@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "events")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class Event {
@@ -19,7 +20,7 @@ public class Event {
     @Column(name = "event_id")
     private Long id;
 
-    @Column(name = "title", nullable = false, length = 120)
+    @Column(nullable = false, length = 120)
     private String title;
 
     @CreationTimestamp
@@ -32,14 +33,14 @@ public class Event {
     @Column(name = "event_date")
     private LocalDateTime eventDate;
 
-    @Column(name = "annotation", nullable = false, length = 2000)
+    @Column(nullable = false, length = 2000)
     private String annotation;
 
     @ManyToOne
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    @Column(name = "description", nullable = false, length = 7000)
+    @Column(nullable = false, length = 7000)
     private String description;
 
     @Column(name = "latitude")
@@ -48,7 +49,7 @@ public class Event {
     @Column(name = "longitude")
     private Float lon;
 
-    @Column(name = "paid")
+    @Column
     private boolean paid;
 
     @Column(name = "participant_limit")
@@ -57,7 +58,7 @@ public class Event {
     @Column(name = "request_moderation")
     private boolean requestModeration;
 
-    @Column(name = "state")
+    @Column
     @Enumerated(EnumType.STRING)
     private EventState state;
 

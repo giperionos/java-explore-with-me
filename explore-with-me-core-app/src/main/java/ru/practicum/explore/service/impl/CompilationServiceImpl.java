@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.CompilationDto;
 import ru.practicum.explore.dto.EventShortDto;
 import ru.practicum.explore.dto.NewCompilationDto;
@@ -18,6 +19,7 @@ import ru.practicum.explore.service.EventService;
 import ru.practicum.explore.service.exceptions.CompilationAlreadyExistsEventException;
 import ru.practicum.explore.service.exceptions.CompilationNotContainEventForDeleteException;
 import ru.practicum.explore.service.exceptions.CompilationNotFoundException;
+import ru.practicum.explore.service.exceptions.EventNotFoundException;
 import ru.practicum.explore.service.mapper.CompilationMapper;
 
 import java.util.ArrayList;
@@ -34,6 +36,7 @@ public class CompilationServiceImpl implements CompilationService {
     private final EventService eventService;
 
     @Override
+    @Transactional(readOnly = true)
     public List<CompilationDto> getCompilations(Boolean pinned, Integer from, Integer size) {
 
         List<Compilation> compilations = new ArrayList<>();
@@ -56,6 +59,7 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public CompilationDto getCompilationById(Long compId) {
         Compilation compilation = findCompilationByIdOrThrowException(compId);
         List<EventShortDto> eventsShortDto = compilation.getEvents().stream().map(eventService::mapEventToEventShortDto).collect(Collectors.toList());
@@ -63,6 +67,7 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public CompilationDto addNewCompilation(NewCompilationDto newCompilationDto) {
 
         //создать новый объект
@@ -84,6 +89,7 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public void deleteCompilation(Long compId) {
         //проверить, есть ли такая подборка
        Compilation compilationForDelete = findCompilationByIdOrThrowException(compId);
@@ -91,13 +97,14 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public void deleteEventFromCompilation(Long compId, Long eventId) {
         //Удалить событие из подборки
         //проверить, есть ли такая подборка
         Compilation compilation = findCompilationByIdOrThrowException(compId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //проверить, что это событие есть в этой подборке
         if (!compilation.getEvents().contains(event)) {
@@ -110,12 +117,13 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public void addEventToCompilation(Long compId, Long eventId) {
         //Добавить событие в подборку
         Compilation compilation = findCompilationByIdOrThrowException(compId);
 
         //убедиться, чта такое событие есть
-        Event event = eventService.findEventByIdOrThrowException(eventId);
+        Event event = findEventByIdOrThrowException(eventId);
 
         //проверить, что этого события еще нет в этой подборке
         if (compilation.getEvents().contains(event)) {
@@ -128,6 +136,7 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public void unpinCompilation(Long compId) {
         //Открепить подборку на главной странице
         Compilation compilation = findCompilationByIdOrThrowException(compId);
@@ -137,6 +146,7 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
+    @Transactional
     public void pinCompilation(Long compId) {
         //Закрепить подборку на главной странице
         Compilation compilation = findCompilationByIdOrThrowException(compId);
@@ -145,9 +155,13 @@ public class CompilationServiceImpl implements CompilationService {
         compilationRepository.save(compilation);
     }
 
-    @Override
-    public Compilation findCompilationByIdOrThrowException(Long compId) {
+    private Compilation findCompilationByIdOrThrowException(Long compId) {
         return compilationRepository.findById(compId)
                 .orElseThrow(() -> new CompilationNotFoundException(compId));
+    }
+
+    private Event findEventByIdOrThrowException(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 }

@@ -22,15 +22,15 @@ public class PublicEventController {
 
     @GetMapping
     public List<EventShortDto> getEventsByParams(
-            @RequestParam(name = "text") String textSearch,
-            @RequestParam(name = "categories") Long[] categoriesIds,
-            @RequestParam(name = "paid") Boolean paid,
-            @RequestParam(name = "rangeStart") String rangeStartEncoded,
-            @RequestParam(name = "rangeEnd") String rangeEndEncoded,
-            @RequestParam(name = "onlyAvailable", defaultValue = "false") Boolean onlyAvailableByRequestLimit,
-            @RequestParam(name = "sort") String sortStr,
-            @RequestParam(name = "from", defaultValue = "0")  Integer from,
-            @RequestParam(name = "size", defaultValue = "10")  Integer size,
+            @RequestParam(name = "text", required = false) String textSearch,
+            @RequestParam(name = "categories", required = false) List<Long> categoriesIds,
+            @RequestParam(name = "paid", required = false) Boolean paid,
+            @RequestParam(name = "rangeStart", required = false) String rangeStartEncoded,
+            @RequestParam(name = "rangeEnd", required = false) String rangeEndEncoded,
+            @RequestParam(name = "onlyAvailable", required = false, defaultValue = "false") Boolean onlyAvailableByRequestLimit,
+            @RequestParam(name = "sort", required = false) String sortStr,
+            @RequestParam(name = "from", required = false, defaultValue = "0")  Integer from,
+            @RequestParam(name = "size", required = false, defaultValue = "10")  Integer size,
             HttpServletRequest request) {
 
         log.info("PublicEventController: Получен GET запрос с параметрами: "

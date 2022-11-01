@@ -7,7 +7,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "compilations")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class Compilation {
@@ -17,10 +18,10 @@ public class Compilation {
     @Column(name = "compilation_id")
     private Long id;
 
-    @Column(name = "title", nullable = false)
+    @Column(nullable = false)
     private String title;
 
-    @Column(name = "pinned")
+    @Column
     private boolean pinned;
 
     @ManyToMany

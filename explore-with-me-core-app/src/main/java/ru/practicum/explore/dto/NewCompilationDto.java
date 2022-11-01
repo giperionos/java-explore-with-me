@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 
 @Data
@@ -18,6 +18,6 @@ public class NewCompilationDto {
 
     private Boolean pinned = Boolean.FALSE;
 
-    @NotNull
+    @NotBlank
     private String title;
 }

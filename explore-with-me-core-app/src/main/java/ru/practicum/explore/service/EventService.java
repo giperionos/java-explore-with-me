@@ -2,7 +2,6 @@ package ru.practicum.explore.service;
 
 import ru.practicum.explore.dto.*;
 import ru.practicum.explore.model.Event;
-import ru.practicum.explore.model.ParticipationRequest;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -30,13 +29,7 @@ public interface EventService {
 
     EventFullDto rejectEvent(Long eventId);
 
-    Event findEventByIdOrThrowException(Long eventId);
-
     EndpointHitDto doHitRequest(HttpServletRequest request);
-
-    List<Event> findAllByIdsAndState(List<Long> eventIds, EventState state);
-
-    List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status);
 
     EventShortDto mapEventToEventShortDto(Event event);
 }

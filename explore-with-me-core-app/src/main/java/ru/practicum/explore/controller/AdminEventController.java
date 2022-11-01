@@ -10,7 +10,6 @@ import ru.practicum.explore.dto.EventFullDto;
 import ru.practicum.explore.dto.EventState;
 import ru.practicum.explore.service.EventService;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,13 +24,13 @@ public class AdminEventController {
 
     @GetMapping
     public List<EventFullDto> getEventsWithFullInfoByParams(
-            @RequestParam(name = "users") Long[] usersIds,
-            @RequestParam(name = "states") String[] states,
-            @RequestParam(name = "categories") Long[] categoriesIds,
-            @RequestParam(name = "rangeStart") String rangeStartEncoded,
-            @RequestParam(name = "rangeEnd") String rangeEndEncoded,
-            @RequestParam(name = "from", defaultValue = "0")  Integer from,
-            @RequestParam(name = "size", defaultValue = "10")  Integer size) {
+            @RequestParam(name = "users", required = false) List<Long> usersIds,
+            @RequestParam(name = "states", required = false) List<String> states,
+            @RequestParam(name = "categories", required = false) List<Long> categoriesIds,
+            @RequestParam(name = "rangeStart", required = false) String rangeStartEncoded,
+            @RequestParam(name = "rangeEnd", required = false) String rangeEndEncoded,
+            @RequestParam(name = "from", required = false, defaultValue = "0")  Integer from,
+            @RequestParam(name = "size", required = false, defaultValue = "10")  Integer size) {
 
         log.info("AdminEventController: Получен GET запрос с параметрами: "
                 + "users = {}"
@@ -51,7 +50,7 @@ public class AdminEventController {
 
         AdminEventFilter filter = AdminEventFilter.builder()
                 .usersIds(usersIds)
-                .states(states.length == 0 ? null : Arrays.stream(states).map(EventState::from).collect(Collectors.toList()))
+                .states(states.size() == 0 ? null : states.stream().map(EventState::from).collect(Collectors.toList()))
                 .categoriesIds(categoriesIds)
                 .rangeStartEncoded(rangeStartEncoded)
                 .rangeEndEncoded(rangeEndEncoded)

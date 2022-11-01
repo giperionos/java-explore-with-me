@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "requests")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ParticipationRequest {
@@ -27,7 +28,7 @@ public class ParticipationRequest {
     @JoinColumn(name = "requester_id", nullable = false)
     private User requester;
 
-    @Column(name = "status")
+    @Column
     @Enumerated(EnumType.STRING)
     private RequestStatus status;
 

@@ -3,7 +3,6 @@ package ru.practicum.explore.service;
 import ru.practicum.explore.dto.NewUserRequest;
 import ru.practicum.explore.dto.UserDto;
 import ru.practicum.explore.dto.UserFilter;
-import ru.practicum.explore.model.User;
 
 import java.util.List;
 
@@ -13,6 +12,4 @@ public interface UserService {
     List<UserDto> getUsersByFilter(UserFilter filter);
 
     void deleteUserById(Long userId);
-
-    User findUserByIdOrThrowException(Long userId);
 }

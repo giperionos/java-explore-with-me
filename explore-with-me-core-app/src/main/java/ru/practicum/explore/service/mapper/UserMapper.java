@@ -1,11 +1,14 @@
 package ru.practicum.explore.service.mapper;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import ru.practicum.explore.dto.NewUserRequest;
 import ru.practicum.explore.dto.UserDto;
 import ru.practicum.explore.dto.UserShortDto;
 import ru.practicum.explore.model.User;
 
-public class UserMapper {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class UserMapper {
     public static UserDto toUserDto(User user) {
         return new UserDto(user.getId(), user.getName(), user.getEmail());
     }
