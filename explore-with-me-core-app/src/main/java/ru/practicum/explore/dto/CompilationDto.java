@@ -18,9 +18,7 @@ public class CompilationDto {
 
     @NotNull
     private Long id;
-
-    @NotNull
-    private Boolean pinned;
+    private boolean pinned;
 
     @NotNull
     private String title;

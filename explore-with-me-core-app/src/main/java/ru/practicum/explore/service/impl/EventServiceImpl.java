@@ -2,6 +2,7 @@ package ru.practicum.explore.service.impl;
 
 import com.querydsl.core.types.ExpressionUtils;
 import com.querydsl.core.types.Predicate;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +32,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -167,17 +169,11 @@ public class EventServiceImpl implements EventService {
         //информация о событии должна включать в себя количество просмотров и количество подтвержденных запросов
 
         //найти событие по id + событие должно быть опубликовано
-        List<Event> foundedEventList = findAllByIdsAndState(List.of(eventId), EventState.PUBLISHED);
+        BooleanExpression byEventId = QEvent.event.id.eq(eventId);
+        BooleanExpression byState = QEvent.event.state.eq(EventState.PUBLISHED);
 
-        if (foundedEventList.isEmpty()) {
-            throw new EventNotFoundException(eventId);
-        }
-
-        if (foundedEventList.size() > 1) {
-            throw new UnexpectedException("getEventWithFullInfoById: Не предвиденная ошибка: не ожидалось больше одного результата!");
-        }
-
-        Event foundedEvent = foundedEventList.get(0);
+        Event foundedEvent = eventRepository.findOne(byEventId.and(byState))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         long confirmedRequests = getCountConfirmedRequestsForEvent(foundedEvent);
         long views = getCountViewsForEvent(foundedEvent);
@@ -194,9 +190,6 @@ public class EventServiceImpl implements EventService {
     @Transactional(readOnly = true)
     public List<EventShortDto> getEventsAddedByCurrentUser(Long userId, Integer from, Integer size) {
         //Получение событий, добавленных текущим пользователем
-        //сначала убедиться, что такой пользователь вообще есть
-        findUserByIdOrThrowException(userId);
-
         Predicate byUserId = QEvent.event.initiator.id.eq(userId);
         PageRequest pageRequest = PageRequest.of(from / size, size, Sort.by("id").ascending());
 
@@ -206,7 +199,6 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto updateEventAddedByCurrentUser(Long userId, UpdateEventRequestDto updateEventRequestDto) {
         //Изменение события добавленного текущим пользователем
 
@@ -215,22 +207,13 @@ public class EventServiceImpl implements EventService {
          * если редактируется отменённое событие, то оно автоматически переходит в состояние ожидания модерации
          * дата и время на которые намечено событие не может быть раньше, чем через два часа от текущего момента
          */
+        //сразу найти событие, по eventId из updateEventRequestDto, где инициатор userId и статус не PUBLISHED
+         BooleanExpression byEventId = QEvent.event.id.eq(updateEventRequestDto.getEventId());
+         BooleanExpression byInitiatorId = QEvent.event.initiator.id.eq(userId);
+         BooleanExpression byState = QEvent.event.state.notIn(EventState.PUBLISHED);
 
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
-
-        //убедиться, чта такое событие есть
-        Event eventForUpdate = findEventByIdOrThrowException(updateEventRequestDto.getEventId());
-
-        //убедиться, что пользователь редактируем своем мероприятие
-        if (user.getId().longValue() != eventForUpdate.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(user, eventForUpdate);
-        }
-
-        //изменить можно только отмененные события или события в состоянии ожидания модерации
-        if (eventForUpdate.getState().equals(EventState.PUBLISHED)) {
-            throw new EventRestrictEditByStateException(eventForUpdate);
-        }
+        Event eventForUpdate = eventRepository.findOne(byEventId.and(byInitiatorId).and(byState))
+                .orElseThrow(() -> new EventNotFoundException(updateEventRequestDto.getEventId()));
 
         //обновить данные мероприятия: если они пришли и не совпадают с тем, что есть в текущем объекте
         //annotation
@@ -287,12 +270,11 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto addNewEventByCurrentUser(Long userId, NewEventDto newEventDto) {
         //Добавление нового события
-
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
+        //получить пользователя для этого мероприятия
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         //получить категорию для этого мероприятия
         Category category = findCategoryByIdOrThrowException(newEventDto.getCategory());
@@ -314,17 +296,11 @@ public class EventServiceImpl implements EventService {
     @Transactional(readOnly = true)
     public EventFullDto getFullInfoEventAddedByCurrentUser(Long userId, Long eventId) {
         //Получение полной информации о событии добавленном текущим пользователем
+        BooleanExpression byInitiatorId = QEvent.event.initiator.id.eq(userId);
+        BooleanExpression byEventId = QEvent.event.id.eq(eventId);
 
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
-
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
-
-        //убедиться, что пользователь получает инфо о своем мероприятие
-        if (user.getId().longValue() != event.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(user, event);
-        }
+        Event event = eventRepository.findOne(byEventId.and(byInitiatorId))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         long confirmedRequests = getCountConfirmedRequestsForEvent(event);
         long views = getCountViewsForEvent(event);
@@ -333,25 +309,15 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto cancelEventAddedByCurrentUser(Long userId, Long eventId) {
         //Отмена события добавленного текущим пользователем.
-
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
-
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
-
-        //убедиться, что пользователь получает инфо о своем мероприятие
-        if (user.getId().longValue() != event.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(user, event);
-        }
-
         //Отменить можно только событие в состоянии ожидания модерации.
-        if (!event.getState().equals(EventState.PENDING)) {
-            throw new EventRestrictEditByStateException(event);
-        }
+        BooleanExpression byInitiatorId = QEvent.event.initiator.id.eq(userId);
+        BooleanExpression byEventId = QEvent.event.id.eq(eventId);
+        BooleanExpression byState = QEvent.event.state.eq(EventState.PENDING);
+
+        Event event = eventRepository.findOne(byEventId.and(byInitiatorId).and(byState))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         event.setState(EventState.CANCELED);
         //сохранить в БД
@@ -406,8 +372,6 @@ public class EventServiceImpl implements EventService {
         Predicate finalPredicate = ExpressionUtils.allOf(predicates);
         List<Event> events = eventRepository.findAll(finalPredicate, pageRequest).toList();
 
-
-
         return events.stream().map((event -> {
             long confirmedRequests = getCountConfirmedRequestsForEvent(event);
             long views = getCountViewsForEvent(event);
@@ -417,12 +381,12 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto editEvent(Long eventId, AdminUpdateEventRequestDto adminUpdateEventRequestDto) {
         //Редактирование данных любого события администратором.
 
-        //убедиться, чта такое событие есть
-        Event eventForUpdate = findEventByIdOrThrowException(eventId);
+        //получить событие для обновления
+        Event eventForUpdate = eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         //обновить данные мероприятия: если они пришли и не совпадают с тем, что есть в текущем объекте
         //annotation
@@ -488,25 +452,20 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto publishEvent(Long eventId) {
         /**
-         * дата начала события должна быть не ранее чем за час от даты публикации.
-         * событие должно быть в состоянии ожидания публикации
+         * Дата начала события должна быть не ранее чем за час от даты публикации.
+         * Событие должно быть в состоянии ожидания публикации
          */
-
-        //убедиться, чта такое событие есть
-        Event eventForPublish = findEventByIdOrThrowException(eventId);
-
         LocalDateTime publishDateTime = LocalDateTime.now();
 
-        if (eventForPublish.getEventDate().isBefore(publishDateTime.plusHours(1L))) {
-            throw new EventRestrictPublishByDateException(eventForPublish);
-        }
+        //получить событие для публикации
+        BooleanExpression byEventId = QEvent.event.id.eq(eventId);
+        BooleanExpression byEventDate = QEvent.event.eventDate.after(publishDateTime.plusHours(1L));
+        BooleanExpression byState = QEvent.event.state.eq(EventState.PENDING);
 
-        if (!eventForPublish.getState().equals(EventState.PENDING)) {
-            throw new EventRestrictPublishByStateException(eventForPublish);
-        }
+        Event eventForPublish = eventRepository.findOne(byEventId.and(byEventDate).and(byState))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         eventForPublish.setState(EventState.PUBLISHED);
         eventForPublish.setPublishDate(publishDateTime);
@@ -517,16 +476,13 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
     public EventFullDto rejectEvent(Long eventId) {
         //Отклонение события
-
         //событие не должно быть опубликовано.
-        Event eventForReject = findEventByIdOrThrowException(eventId);
-
-        if (eventForReject.getState().equals(EventState.PUBLISHED)) {
-            throw new EventRestrictRejectByStateException(eventForReject);
-        }
+        BooleanExpression byEventId = QEvent.event.id.eq(eventId);
+        BooleanExpression byState = QEvent.event.state.notIn(EventState.PUBLISHED);
+        Event eventForReject = eventRepository.findOne(byEventId.and(byState))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         eventForReject.setState(EventState.CANCELED);
 
@@ -543,13 +499,6 @@ public class EventServiceImpl implements EventService {
         endpointHitDto.setIp(request.getRemoteAddr());
         endpointHitDto.setTimestamp(LocalDateTime.now().format(Config.formatter));
         return statsClientService.hit(endpointHitDto);
-    }
-
-    private List<Event> findAllByIdsAndState(List<Long> eventIds, EventState state) {
-        return  eventRepository.findAllById(eventIds)
-                .stream()
-                .filter((event) -> event.getState().equals(state))
-                .collect(Collectors.toList());
     }
 
     private List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status) {
@@ -596,15 +545,5 @@ public class EventServiceImpl implements EventService {
     private Category findCategoryByIdOrThrowException(Long catId) {
         return categoryRepository.findById(catId)
                 .orElseThrow(() -> new CategoryNotFoundException(catId));
-    }
-
-    private User findUserByIdOrThrowException(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
-    private Event findEventByIdOrThrowException(Long eventId) {
-        return eventRepository.findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 }

@@ -20,6 +20,7 @@ import ru.practicum.explore.service.mapper.UserMapper;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -28,7 +29,6 @@ public class UserServiceImpl implements UserService {
     private final UserRepository repository;
 
     @Override
-    @Transactional
     public UserDto addNewUser(NewUserRequest newUserRequest) {
         User userForSave = UserMapper.toUser(newUserRequest);
         return UserMapper.toUserDto(repository.save(userForSave));
@@ -60,7 +60,6 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
     public void deleteUserById(Long userId) {
         User userForDelete = repository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));

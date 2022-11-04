@@ -29,8 +29,8 @@ public class AdminEventController {
             @RequestParam(name = "categories", required = false) List<Long> categoriesIds,
             @RequestParam(name = "rangeStart", required = false) String rangeStartEncoded,
             @RequestParam(name = "rangeEnd", required = false) String rangeEndEncoded,
-            @RequestParam(name = "from", required = false, defaultValue = "0")  Integer from,
-            @RequestParam(name = "size", required = false, defaultValue = "10")  Integer size) {
+            @RequestParam(name = "from", defaultValue = "0")  Integer from,
+            @RequestParam(name = "size", defaultValue = "10")  Integer size) {
 
         log.info("AdminEventController: Получен GET запрос с параметрами: "
                 + "users = {}"

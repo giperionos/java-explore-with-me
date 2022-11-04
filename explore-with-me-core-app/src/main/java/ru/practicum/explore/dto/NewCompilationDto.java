@@ -16,7 +16,7 @@ public class NewCompilationDto {
 
     private List<Long> events;
 
-    private Boolean pinned = Boolean.FALSE;
+    private boolean pinned;
 
     @NotBlank
     private String title;

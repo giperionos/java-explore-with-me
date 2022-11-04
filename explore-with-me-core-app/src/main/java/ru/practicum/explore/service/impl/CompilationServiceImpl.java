@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -67,13 +68,12 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
-    @Transactional
     public CompilationDto addNewCompilation(NewCompilationDto newCompilationDto) {
 
         //создать новый объект
         Compilation newCompilation = new Compilation();
         newCompilation.setTitle(newCompilationDto.getTitle());
-        newCompilation.setPinned(newCompilationDto.getPinned());
+        newCompilation.setPinned(newCompilationDto.isPinned());
 
         //получить категории по списку
         List<EventShortDto> eventsShortDto = new ArrayList<>();
@@ -89,21 +89,17 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
-    @Transactional
     public void deleteCompilation(Long compId) {
-        //проверить, есть ли такая подборка
-       Compilation compilationForDelete = findCompilationByIdOrThrowException(compId);
-       compilationRepository.delete(compilationForDelete);
+       compilationRepository.deleteById(compId);
     }
 
     @Override
-    @Transactional
     public void deleteEventFromCompilation(Long compId, Long eventId) {
         //Удалить событие из подборки
-        //проверить, есть ли такая подборка
+        //найти подборку для обновления
         Compilation compilation = findCompilationByIdOrThrowException(compId);
 
-        //убедиться, чта такое событие есть
+        //найти событие для удаления из подборки
         Event event = findEventByIdOrThrowException(eventId);
 
         //проверить, что это событие есть в этой подборке
@@ -117,12 +113,11 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
-    @Transactional
     public void addEventToCompilation(Long compId, Long eventId) {
         //Добавить событие в подборку
         Compilation compilation = findCompilationByIdOrThrowException(compId);
 
-        //убедиться, чта такое событие есть
+        //найти событие для добавления в подборку
         Event event = findEventByIdOrThrowException(eventId);
 
         //проверить, что этого события еще нет в этой подборке
@@ -136,7 +131,6 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
-    @Transactional
     public void unpinCompilation(Long compId) {
         //Открепить подборку на главной странице
         Compilation compilation = findCompilationByIdOrThrowException(compId);
@@ -146,7 +140,6 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     @Override
-    @Transactional
     public void pinCompilation(Long compId) {
         //Закрепить подборку на главной странице
         Compilation compilation = findCompilationByIdOrThrowException(compId);

@@ -27,10 +27,10 @@ public class PublicEventController {
             @RequestParam(name = "paid", required = false) Boolean paid,
             @RequestParam(name = "rangeStart", required = false) String rangeStartEncoded,
             @RequestParam(name = "rangeEnd", required = false) String rangeEndEncoded,
-            @RequestParam(name = "onlyAvailable", required = false, defaultValue = "false") Boolean onlyAvailableByRequestLimit,
-            @RequestParam(name = "sort", required = false) String sortStr,
-            @RequestParam(name = "from", required = false, defaultValue = "0")  Integer from,
-            @RequestParam(name = "size", required = false, defaultValue = "10")  Integer size,
+            @RequestParam(name = "onlyAvailable", defaultValue = "false") Boolean onlyAvailableByRequestLimit,
+            @RequestParam(name = "sort", defaultValue = "EVENT_DATE") EventSortType sort,
+            @RequestParam(name = "from", defaultValue = "0")  Integer from,
+            @RequestParam(name = "size", defaultValue = "10")  Integer size,
             HttpServletRequest request) {
 
         log.info("PublicEventController: Получен GET запрос с параметрами: "
@@ -49,7 +49,7 @@ public class PublicEventController {
                 rangeStartEncoded,
                 rangeEndEncoded,
                 onlyAvailableByRequestLimit,
-                sortStr,
+                sort,
                 from,
                 size);
 
@@ -60,7 +60,7 @@ public class PublicEventController {
                 .rangeStartEncoded(rangeStartEncoded)
                 .rangeEndEncoded(rangeEndEncoded)
                 .onlyAvailableByRequestLimit(onlyAvailableByRequestLimit)
-                .sortType(sortStr.isBlank() ? null : EventSortType.from(sortStr))
+                .sortType(sort)
                 .from(from)
                 .size(size)
                 .build();

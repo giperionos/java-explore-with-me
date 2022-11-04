@@ -19,6 +19,7 @@ import ru.practicum.explore.service.mapper.CategoryMapper;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -43,14 +44,12 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
-    @Transactional
     public CategoryDto addNewCategory(NewCategoryDto newCategoryDto) {
         Category categoryForSave = CategoryMapper.toCategory(newCategoryDto);
         return CategoryMapper.toCategoryDto(categoryRepository.save(categoryForSave));
     }
 
     @Override
-    @Transactional
     public CategoryDto updateCategory(CategoryDto categoryDto) {
         //сначала нужно убедиться, что категория, которая обновляется вообще есть
         Category categoryForUpdate = findCategoryByIdOrThrowException(categoryDto.getId());
@@ -63,7 +62,6 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
-    @Transactional
     public void deleteCategory(Long categoryId) {
         //сначала нужно убедиться, что категория, которая обновляется вообще есть
         Category categoryForDelete = findCategoryByIdOrThrowException(categoryId);

@@ -1,7 +1,7 @@
 package ru.practicum.explore.service.impl;
 
-import com.querydsl.core.types.ExpressionUtils;
 import com.querydsl.core.types.Predicate;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -10,10 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.EventState;
 import ru.practicum.explore.dto.ParticipationRequestDto;
 import ru.practicum.explore.dto.RequestStatus;
-import ru.practicum.explore.model.Event;
-import ru.practicum.explore.model.ParticipationRequest;
-import ru.practicum.explore.model.QParticipationRequest;
-import ru.practicum.explore.model.User;
+import ru.practicum.explore.model.*;
 import ru.practicum.explore.repository.EventRepository;
 import ru.practicum.explore.repository.ParticipationRequestRepository;
 import ru.practicum.explore.repository.UserRepository;
@@ -24,6 +21,7 @@ import ru.practicum.explore.service.mapper.RequestMapper;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -37,10 +35,6 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     @Transactional(readOnly = true)
     public List<ParticipationRequestDto> getUserRequests(Long userId) {
         //Получение информации о заявках текущего пользователя на участие в чужих событиях
-        //сначала убедиться, что такой пользователь вообще есть
-        findUserByIdOrThrowException(userId);
-
-        //поиск по условию
         Predicate byRequesterId = QParticipationRequest.participationRequest.requester.id.eq(userId);
         return repository.findAll(byRequesterId, Pageable.unpaged())
                 .stream()
@@ -49,7 +43,6 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
-    @Transactional
     public ParticipationRequestDto addParticipationRequestByUserForEvent(Long userId, Long eventId) {
         /**
          * нельзя добавить повторный запрос
@@ -58,45 +51,41 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
          * если у события достигнут лимит запросов на участие - необходимо вернуть ошибку
          * если для события отключена пре-модерация запросов на участие, то запрос должен автоматически перейти в состояние подтвержденного
          */
-
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
-
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
-
-        //Если пользователь пытается добавить запрос на участие в своем же событии
-        if (user.getId().longValue() == event.getInitiator().getId().longValue()) {
-            throw new ParticipationRequestUserOwnEventException(user, event);
-        }
+        //нельзя добавить повторный запрос
+        BooleanExpression byRequesterIdInRequest = QParticipationRequest.participationRequest.requester.id.eq(userId);
+        BooleanExpression byEventIdInRequest = QParticipationRequest.participationRequest.event.id.eq(eventId);
+        repository.findOne(byRequesterIdInRequest.and(byEventIdInRequest))
+                .ifPresent(request -> {
+                    throw new ParticipationRequestAlreadyExistsException(userId, eventId);
+                });
 
         //нельзя участвовать в неопубликованном событии
-        if (!event.getState().equals(EventState.PUBLISHED)) {
-            throw new ParticipationRequestOnNotPublishedEvent(user, event);
+        BooleanExpression byEventIdInEvent = QEvent.event.id.eq(eventId);
+        BooleanExpression byStateInEvent = QEvent.event.state.eq(EventState.PUBLISHED);
+
+        //Найти событие
+        Event event = eventRepository.findOne(byEventIdInEvent.and(byStateInEvent))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+
+        //Если пользователь пытается добавить запрос на участие в своем же событии
+        if (userId == event.getInitiator().getId().longValue()) {
+            throw new ParticipationRequestUserOwnEventException(userId, event);
         }
 
         //если у события достигнут лимит запросов на участие - необходимо вернуть ошибку
         //Предварительно нужно посчитать Количество одобренных заявок на участие в данном событии
-        Predicate byConfirmedStatus = QParticipationRequest.participationRequest.status.eq(RequestStatus.CONFIRMED);
-        Predicate byEventId = QParticipationRequest.participationRequest.event.id.eq(eventId);
-        Predicate eventIdAndConfirmedRequestPredicate = ExpressionUtils.allOf(byConfirmedStatus, byEventId);
+        Predicate byConfirmedStatusInRequest = QParticipationRequest.participationRequest.status.eq(RequestStatus.CONFIRMED);
 
-        List<ParticipationRequest> alreadyExistConfirmedRequests = repository.findAll(eventIdAndConfirmedRequestPredicate, Pageable.unpaged())
+        List<ParticipationRequest> alreadyExistConfirmedRequests = repository.findAll(byRequesterIdInRequest.and(byConfirmedStatusInRequest), Pageable.unpaged())
                 .stream().collect(Collectors.toList());
 
         if (event.getParticipantLimit() != null && event.getParticipantLimit() != 0 && event.getParticipantLimit() == alreadyExistConfirmedRequests.size()) {
-            throw new ParticipationRequestLimitReachedException(user, event);
+            throw new ParticipationRequestLimitReachedException(event);
         }
 
-        //нельзя добавить повторный запрос
-        Predicate byRequesterId = QParticipationRequest.participationRequest.requester.id.eq(userId);
-        Predicate byRequesterIdAndEventId = ExpressionUtils.allOf(byRequesterId, byEventId);
-        List<ParticipationRequest> requestsForEventAndRequester = repository.findAll(byRequesterIdAndEventId, Pageable.unpaged())
-                .stream().collect(Collectors.toList());
-
-        if (!requestsForEventAndRequester.isEmpty()) {
-            throw new ParticipationRequestAlreadyExistsException(user, event);
-        }
+        //найти текущего пользователя
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         //Создать заявку
         ParticipationRequest newRequest = new ParticipationRequest();
@@ -112,14 +101,12 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
-    @Transactional
     public ParticipationRequestDto cancelParticipationRequestByUser(Long userId, Long requestId) {
-        //Отмена своего запроса на участие в событии
-        //убедиться, что такой пользователь вообще есть
-        User user = findUserByIdOrThrowException(userId);
+        BooleanExpression byRequestId = QParticipationRequest.participationRequest.id.eq(requestId);
+        BooleanExpression byUserId = QParticipationRequest.participationRequest.requester.id.eq(userId);
 
-        //убедиться, чта такой запрос есть для данного пользователя
-        ParticipationRequest canceledRequest = findRequestByIdAndRequesterOrThrowException(requestId, user);
+        ParticipationRequest canceledRequest = repository.findOne(byRequestId.and(byUserId))
+                .orElseThrow(() -> new ParticipationRequestForRequesterNotFoundException(userId, requestId));
 
         //закрыть запрос
         canceledRequest.setStatus(RequestStatus.CANCELED);
@@ -131,17 +118,12 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     @Transactional(readOnly = true)
     public List<ParticipationRequestDto> getParticipationRequestsInEventOfCurrentUser(Long userId, Long eventId) {
         //Получение информации о запросах на участие в событии текущего пользователя
+        //найти событие и убедиться, что текущий пользователя является его инициатором
+        BooleanExpression byEventIdInEvent = QEvent.event.id.eq(eventId);
+        BooleanExpression byInitiatorIdInEvent = QEvent.event.initiator.id.eq(userId);
 
-        //убедиться, что такой пользователь вообще есть
-        User initiator = findUserByIdOrThrowException(userId);
-
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
-
-        //убедиться, что данное событие принадлежит этому пользователю
-        if (initiator.getId().longValue() != event.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(initiator, event);
-        }
+        eventRepository.findOne(byEventIdInEvent.and(byInitiatorIdInEvent))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         Predicate byEventId = QParticipationRequest.participationRequest.event.id.eq(eventId);
 
@@ -152,7 +134,6 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
-    @Transactional
     public ParticipationRequestDto confirmParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId) {
         /**
          * если для события лимит заявок равен 0 или отключена пре-модерация заявок, то подтверждение заявок не требуется
@@ -160,19 +141,19 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
          * если при подтверждении данной заявки, лимит заявок для события исчерпан, то все неподтверждённые заявки необходимо отклонить
          */
 
-        //убедиться, что такой пользователь вообще есть
-        User initiator = findUserByIdOrThrowException(userId);
+        //Сначала найти запрос с таким requestId, для такого eventId
+        BooleanExpression byRequestIdInRequests = QParticipationRequest.participationRequest.id.eq(requestId);
+        BooleanExpression byEventIdInRequests = QParticipationRequest.participationRequest.event.id.eq(eventId);
 
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
+        ParticipationRequest request = repository.findOne(byRequestIdInRequests.and(byEventIdInRequests))
+                .orElseThrow(() -> new ParticipationRequestNotFoundException(requestId));
 
-        //убедиться, чта такой запрос есть
-        ParticipationRequest request = findRequestByIdOrThrowException(requestId);
+        BooleanExpression byEventIdInEvent = QEvent.event.id.eq(eventId);
+        BooleanExpression byInitiatorIdInEvent = QEvent.event.initiator.id.eq(userId);
 
-        //убедиться, что данное событие принадлежит этому пользователю
-        if (initiator.getId().longValue() != event.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(initiator, event);
-        }
+        //Найти событие этого пользователя
+        Event event = eventRepository.findOne(byEventIdInEvent.and(byInitiatorIdInEvent))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         //если для события лимит заявок равен 0 или отключена пре-модерация заявок, то подтверждение заявок не требуется
         if (event.getParticipantLimit() != null && event.getParticipantLimit() == 0 || !event.isRequestModeration()) {
@@ -180,24 +161,22 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         }
 
         //нельзя подтвердить заявку, если уже достигнут лимит по заявкам на данное событие
-        Predicate byConfirmedStatus = QParticipationRequest.participationRequest.status.eq(RequestStatus.CONFIRMED);
-        Predicate byEventId = QParticipationRequest.participationRequest.event.id.eq(eventId);
-        Predicate eventIdAndConfirmedRequestPredicate = ExpressionUtils.allOf(byConfirmedStatus, byEventId);
+        BooleanExpression byConfirmedStatus = QParticipationRequest.participationRequest.status.eq(RequestStatus.CONFIRMED);
+        BooleanExpression byEventId = QParticipationRequest.participationRequest.event.id.eq(eventId);
 
-        List<ParticipationRequest> alreadyExistConfirmedRequests = repository.findAll(eventIdAndConfirmedRequestPredicate, Pageable.unpaged())
+        List<ParticipationRequest> alreadyExistConfirmedRequests = repository.findAll(byEventId.and(byConfirmedStatus), Pageable.unpaged())
                 .stream().collect(Collectors.toList());
 
         if (event.getParticipantLimit() != null && event.getParticipantLimit() != 0 && event.getParticipantLimit() == alreadyExistConfirmedRequests.size()) {
-            throw new ParticipationRequestLimitReachedException(initiator, event);
+            throw new ParticipationRequestLimitReachedException(event);
         }
 
         //если при подтверждении данной заявки, лимит заявок для события исчерпан, то все неподтверждённые заявки необходимо отклонить
         if (event.getParticipantLimit() != null && event.getParticipantLimit() != 0 && event.getParticipantLimit() == alreadyExistConfirmedRequests.size() + 1) {
-            Predicate byPendingStatus = QParticipationRequest.participationRequest.status.eq(RequestStatus.PENDING);
-            Predicate eventIdAndPendingRequestPredicate = ExpressionUtils.allOf(byPendingStatus, byEventId);
+            BooleanExpression byPendingStatus = QParticipationRequest.participationRequest.status.eq(RequestStatus.PENDING);
 
             //получить список все заявок, ожидающих подтверждения - отказать
-            List<ParticipationRequest> pendingRequests = repository.findAll(eventIdAndPendingRequestPredicate, Pageable.unpaged())
+            List<ParticipationRequest> pendingRequests = repository.findAll(byEventId.and(byPendingStatus), Pageable.unpaged())
                     .stream()
                     .collect(Collectors.toList());
 
@@ -214,61 +193,24 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     }
 
     @Override
-    @Transactional
     public ParticipationRequestDto rejectParticipationRequestInEventOfCurrentUser(Long userId, Long eventId, Long requestId) {
+        //Сначала найти запрос с таким requestId, для такого eventId
+        BooleanExpression byRequestIdInRequests = QParticipationRequest.participationRequest.id.eq(requestId);
+        BooleanExpression byEventIdInRequests = QParticipationRequest.participationRequest.event.id.eq(eventId);
 
-        //убедиться, что такой пользователь вообще есть
-        User initiator = findUserByIdOrThrowException(userId);
+        ParticipationRequest request = repository.findOne(byRequestIdInRequests.and(byEventIdInRequests))
+                .orElseThrow(() -> new ParticipationRequestNotFoundException(requestId));
 
-        //убедиться, чта такое событие есть
-        Event event = findEventByIdOrThrowException(eventId);
+        BooleanExpression byEventIdInEvent = QEvent.event.id.eq(eventId);
+        BooleanExpression byInitiatorIdInEvent = QEvent.event.initiator.id.eq(userId);
 
-        //убедиться, чта такой запрос есть
-        ParticipationRequest request = findRequestByIdOrThrowException(requestId);
-
-        //убедиться, что данное событие принадлежит этому пользователю
-        if (initiator.getId().longValue() != event.getInitiator().getId().longValue()) {
-            throw new UserHaveNoAccessEventException(initiator, event);
-        }
+        //Проверить, что текущий  user является инициатором этого события
+        eventRepository.findOne(byEventIdInEvent.and(byInitiatorIdInEvent))
+                .orElseThrow(() -> new EventNotFoundException(eventId));
 
         //отказать заявку
         request.setStatus(RequestStatus.REJECTED);
 
         return RequestMapper.toParticipationRequestDto(repository.save(request));
-    }
-
-    private ParticipationRequest findRequestByIdAndRequesterOrThrowException(Long requestId, User requester) {
-
-        Predicate byUserId = QParticipationRequest.participationRequest.requester.id.eq(requester.getId());
-        Predicate byRequestId = QParticipationRequest.participationRequest.id.eq(requestId);
-
-        Predicate finalPredicate = ExpressionUtils.allOf(byRequestId, byUserId);
-        List<ParticipationRequest> requests = repository.findAll(finalPredicate, Pageable.unpaged())
-                .stream().collect(Collectors.toList());
-
-        if (requests.isEmpty()) {
-            throw new ParticipationRequestForRequesterNotFoundException(requester, requestId);
-        }
-
-        if (requests.size() > 1) {
-            throw new UnexpectedException("findRequestByIdAndRequesterOrThrowException: Не предвиденная ошибка: не ожидалось больше одного результата!");
-        }
-
-         return requests.get(0);
-    }
-
-    private ParticipationRequest findRequestByIdOrThrowException(Long requestId) {
-        return repository.findById(requestId)
-                .orElseThrow(() -> new ParticipationRequestNotFoundException(requestId));
-    }
-
-    private User findUserByIdOrThrowException(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
-    private Event findEventByIdOrThrowException(Long eventId) {
-        return eventRepository.findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 }
