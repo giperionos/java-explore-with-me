@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,11 +21,19 @@ import java.util.stream.Collectors;
 public class ErrorHandler {
 
     @ExceptionHandler({MethodArgumentNotValidException.class,
-            EndDateBeforeStartDateException.class,
-            SortTypeNotValidException.class,
-            EventStateTypeNotValidException.class})
+            MissingServletRequestParameterException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiErrorDto handleValidateException(MethodArgumentNotValidException exception) {
+    public ApiErrorDto handleValidateArgumentException(Exception exception) {
+        log.info("{}: {}", HttpStatus.BAD_REQUEST.value(), exception.getMessage(), exception);
+        return fillApiErrorDto(exception, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({EndDateBeforeStartDateException.class,
+            SortTypeNotValidException.class,
+            EventStateTypeNotValidException.class,
+            AdminChatActionNotValidException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiErrorDto handleValidateRuntimeException(RuntimeException exception) {
         log.info("{}: {}", HttpStatus.BAD_REQUEST.value(), exception.getMessage(), exception);
         return fillApiErrorDto(exception, HttpStatus.BAD_REQUEST);
     }
@@ -35,7 +44,10 @@ public class ErrorHandler {
             ParticipationRequestNotFoundException.class,
             UserNotFoundException.class,
             CompilationNotFoundException.class,
-            CompilationNotContainEventForDeleteException.class})
+            CompilationNotContainEventForDeleteException.class,
+            ChatNotFoundException.class,
+            ChatForRequestNotFoundException.class,
+            MessageNotFoundException.class})
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiErrorDto handleNotFoundExceptionException(RuntimeException exception) {
         log.info("{}: {}", HttpStatus.NOT_FOUND.value(), exception.getMessage(), exception);

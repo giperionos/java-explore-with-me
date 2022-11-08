@@ -1,6 +1,7 @@
 package ru.practicum.explore.service.impl;
 
 import com.querydsl.core.types.Predicate;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -9,9 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.dto.CompilationDto;
 import ru.practicum.explore.dto.EventShortDto;
 import ru.practicum.explore.dto.NewCompilationDto;
-import ru.practicum.explore.model.Compilation;
-import ru.practicum.explore.model.Event;
-import ru.practicum.explore.model.QCompilation;
+import ru.practicum.explore.model.*;
+import ru.practicum.explore.repository.CompilationEventRepository;
 import ru.practicum.explore.repository.CompilationRepository;
 import ru.practicum.explore.repository.EventRepository;
 import ru.practicum.explore.service.CompilationService;
@@ -21,6 +21,7 @@ import ru.practicum.explore.service.exceptions.CompilationNotContainEventForDele
 import ru.practicum.explore.service.exceptions.CompilationNotFoundException;
 import ru.practicum.explore.service.exceptions.EventNotFoundException;
 import ru.practicum.explore.service.mapper.CompilationMapper;
+import ru.practicum.explore.service.mapper.EventMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,7 @@ public class CompilationServiceImpl implements CompilationService {
 
     private final CompilationRepository compilationRepository;
     private final EventRepository eventRepository;
+    private final CompilationEventRepository compilationEventRepository;
     private final EventService eventService;
 
     @Override
@@ -48,10 +50,43 @@ public class CompilationServiceImpl implements CompilationService {
             compilations.addAll(compilationRepository.findAll());
         }
 
+        //сформировать список вообще всех событий из всех полученных подборок разом!
+        //сначала получить все id подборок
+        List<Long> compilationsIds = compilations
+                .stream()
+                .map((Compilation::getId))
+                .collect(Collectors.toList());
+
+        //по всем id подборок получить все id событий
+        BooleanExpression byCompIds = QCompilationEvent.compilationEvent.compilationId.in(compilationsIds);
+        List<Long> eventIds = compilationEventRepository.findAll(byCompIds, Pageable.unpaged())
+                .stream()
+                .map(CompilationEvent::getEventId)
+                .collect(Collectors.toList());
+
+        //получить все события по всем id
+        List<Event> allEvents = eventRepository.findAllById(eventIds);
+
+        //для всех этих событий разом получить заявки и просмотры и сформировать EventShortDto
+        List<EventShortDto> allEventsShortDto = eventService.getFullDtoForAllEvents(allEvents)
+                .stream()
+                .map(EventMapper::toEventShortDtoFromFull)
+                .collect(Collectors.toList());
+
         return compilations
                 .stream()
                 .map((compilation -> {
-                    List<EventShortDto> eventsShortDto = compilation.getEvents().stream().map(eventService::mapEventToEventShortDto).collect(Collectors.toList());
+                    List<EventShortDto> eventsShortDto = new ArrayList<>();
+
+                    //среди списка вообще всех allEventsShortDto найти события именно для текущей подборки
+                    for (Event event: compilation.getEvents()) {
+                        for (EventShortDto eventShortDto: allEventsShortDto) {
+                            if (event.getId().equals(eventShortDto.getId())) {
+                                eventsShortDto.add(eventShortDto);
+                            }
+                        }
+                    }
+
                     return CompilationMapper.toCompilationDto(compilation, eventsShortDto);
                 }))
                 .skip(from)
@@ -63,7 +98,10 @@ public class CompilationServiceImpl implements CompilationService {
     @Transactional(readOnly = true)
     public CompilationDto getCompilationById(Long compId) {
         Compilation compilation = findCompilationByIdOrThrowException(compId);
-        List<EventShortDto> eventsShortDto = compilation.getEvents().stream().map(eventService::mapEventToEventShortDto).collect(Collectors.toList());
+        List<EventShortDto> eventsShortDto = eventService.getFullDtoForAllEvents(compilation.getEvents())
+                .stream()
+                .map(EventMapper::toEventShortDtoFromFull)
+                .collect(Collectors.toList());
         return CompilationMapper.toCompilationDto(compilation, eventsShortDto);
     }
 
@@ -80,9 +118,12 @@ public class CompilationServiceImpl implements CompilationService {
         if (!newCompilationDto.getEvents().isEmpty()) {
             List<Event> events  = eventRepository.findAllById(newCompilationDto.getEvents());
             newCompilation.setEvents(events);
-            eventsShortDto.addAll(events.stream()
-                    .map(eventService::mapEventToEventShortDto)
-                    .collect(Collectors.toList()));
+            eventsShortDto.addAll(
+                    eventService.getFullDtoForAllEvents(events)
+                            .stream()
+                            .map(EventMapper::toEventShortDtoFromFull)
+                            .collect(Collectors.toList())
+            );
         }
 
         return CompilationMapper.toCompilationDto(compilationRepository.save(newCompilation), eventsShortDto);

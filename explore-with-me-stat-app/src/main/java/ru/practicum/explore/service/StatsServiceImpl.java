@@ -2,6 +2,7 @@ package ru.practicum.explore.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.explore.EndpointViewParamsHelper;
 import ru.practicum.explore.dto.EndpointHitDto;
 import ru.practicum.explore.dto.EndpointViewDto;
@@ -10,6 +11,7 @@ import ru.practicum.explore.repository.EndpointEntityRepository;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Transactional
 @Service
 @RequiredArgsConstructor
 public class StatsServiceImpl implements StatsService {
@@ -22,6 +24,7 @@ public class StatsServiceImpl implements StatsService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<EndpointViewDto> getEndpointStatsByParams(EndpointViewParamsHelper params) {
 
         if (params.getUnique() && params.getUris() != null && params.getUris().size() > 0) {

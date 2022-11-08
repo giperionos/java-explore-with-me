@@ -50,7 +50,7 @@ public class AdminEventController {
 
         AdminEventFilter filter = AdminEventFilter.builder()
                 .usersIds(usersIds)
-                .states(states.size() == 0 ? null : states.stream().map(EventState::from).collect(Collectors.toList()))
+                .states(states == null ? null : states.stream().map(EventState::from).collect(Collectors.toList()))
                 .categoriesIds(categoriesIds)
                 .rangeStartEncoded(rangeStartEncoded)
                 .rangeEndEncoded(rangeEndEncoded)

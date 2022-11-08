@@ -31,5 +31,5 @@ public interface EventService {
 
     EndpointHitDto doHitRequest(HttpServletRequest request);
 
-    EventShortDto mapEventToEventShortDto(Event event);
+    List<EventFullDto> getFullDtoForAllEvents(List<Event> events);
 }

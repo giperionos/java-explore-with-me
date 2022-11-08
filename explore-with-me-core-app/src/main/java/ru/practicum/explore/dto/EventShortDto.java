@@ -22,7 +22,7 @@ public class EventShortDto {
     @NotNull
     private CategoryDto category;
 
-    private Long confirmedRequests;
+    private long confirmedRequests;
 
     @NotNull
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -39,5 +39,5 @@ public class EventShortDto {
     @NotBlank
     private String title;
 
-    private Long views;
+    private long views;
 }
