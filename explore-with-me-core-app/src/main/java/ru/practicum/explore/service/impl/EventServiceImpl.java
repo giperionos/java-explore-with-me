@@ -495,7 +495,8 @@ public class EventServiceImpl implements EventService {
     }
 
     private List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status) {
-        return requestRepository.findAllById(eventIds)
+        BooleanExpression byEventIds = QParticipationRequest.participationRequest.event.id.in(eventIds);
+        return requestRepository.findAll(byEventIds, Pageable.unpaged())
                 .stream()
                 .filter((participationRequest -> participationRequest.getStatus().equals(status)))
                 .collect(Collectors.toList());
@@ -519,7 +520,7 @@ public class EventServiceImpl implements EventService {
         //сделать запрос
         List<EndpointViewDto> eventStatistics = statsClientService.getEndpointStatsByParams(viewFilter.getQuery());
 
-        return eventStatistics.size();
+        return eventStatistics != null && eventStatistics.size() > 0 ? eventStatistics.get(0).getHits() : 0;
     }
 
     private List<Category> getCategoryByIds(List<Long> ids) {
@@ -555,7 +556,8 @@ public class EventServiceImpl implements EventService {
         List<Long> eventIds = events.stream().map(Event::getId).collect(Collectors.toList());
 
         //для всех событий получить количество заявок - разом
-        List<ParticipationRequest> requestsForEvents = requestRepository.findAllById(eventIds)
+        BooleanExpression byEventIds = QParticipationRequest.participationRequest.event.id.in(eventIds);
+        List<ParticipationRequest> requestsForEvents = requestRepository.findAll(byEventIds, Pageable.unpaged())
                 .stream()
                 .filter((participationRequest -> participationRequest.getStatus().equals(RequestStatus.CONFIRMED)))
                 .collect(Collectors.toList());

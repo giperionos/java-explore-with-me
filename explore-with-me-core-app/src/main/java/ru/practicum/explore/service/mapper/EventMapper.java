@@ -100,7 +100,7 @@ public final class EventMapper {
                 //в endpointViewDto в uri хранится строка вида "/events/9"
                 //Можно сформировать для текущего event такую же строку, чтобы удобнее сравнивать
                 if (endpointViewDto.getUri().equals(String.format(URI_PATTERN, event.getId()))) {
-                    eventFullDto.setViews(eventFullDto.getViews() + 1L);
+                    eventFullDto.setViews(endpointViewDto.getHits());
                 }
             }
 
