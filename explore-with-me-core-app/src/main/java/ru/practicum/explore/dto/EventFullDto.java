@@ -22,7 +22,7 @@ public class EventFullDto {
     @NotNull
     private CategoryDto category;
 
-    private Long confirmedRequests;
+    private long confirmedRequests;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdOn;
@@ -56,5 +56,5 @@ public class EventFullDto {
     @NotBlank
     private String title;
 
-    private Long views;
+    private long views;
 }

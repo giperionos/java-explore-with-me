@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 public class EventServiceImpl implements EventService {
 
     private static final String APP_NAME = "ExploreWithMeApp";
-    private static final String URI_PATTERN = "/event/%s";
+    private static final String URI_PATTERN = "/events/%s";
     private final StatsClientService statsClientService;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
@@ -63,7 +63,7 @@ public class EventServiceImpl implements EventService {
         predicates.add(QEvent.event.state.eq(EventState.PUBLISHED));
 
         //текстовый поиск (по аннотации и подробному описанию) должен быть без учета регистра букв
-        if (!filter.getTextSearch().isBlank()) {
+        if (filter.getTextSearch() != null && !filter.getTextSearch().isBlank()) {
             predicates.add(
                     QEvent.event.annotation.containsIgnoreCase(filter.getTextSearch())
                             .or(QEvent.event.description.containsIgnoreCase(filter.getTextSearch()))
@@ -71,19 +71,19 @@ public class EventServiceImpl implements EventService {
         }
 
         //если в запросе не указан диапазон дат [rangeStart-rangeEnd], то нужно выгружать события, которые произойдут позже текущей даты и времени
-        LocalDateTime start = filter.getRangeStartEncoded().isBlank() ?
+        LocalDateTime start = filter.getRangeStartEncoded() == null || filter.getRangeStartEncoded().isBlank() ?
                 LocalDateTime.now() :
                 LocalDateTime.parse(URLDecoder.decode(filter.getRangeStartEncoded(), StandardCharsets.UTF_8), Config.formatter);
 
 
-        LocalDateTime end = filter.getRangeEndEncoded().isBlank() ?
+        LocalDateTime end = filter.getRangeEndEncoded() == null || filter.getRangeEndEncoded().isBlank() ?
                 LocalDateTime.now().plusYears(1) :
                 LocalDateTime.parse(URLDecoder.decode(filter.getRangeEndEncoded(), StandardCharsets.UTF_8), Config.formatter);
 
         predicates.add(QEvent.event.eventDate.between(start,end));
 
         //если пришли конкретные категории
-        if (filter.getCategoriesIds().size() > 0) {
+        if (filter.getCategoriesIds() != null && filter.getCategoriesIds().size() > 0) {
             predicates.add(QEvent.event.category.in(getCategoryByIds(filter.getCategoriesIds())));
         }
 
@@ -94,45 +94,25 @@ public class EventServiceImpl implements EventService {
 
         //Получить предварительный список из БД
         Predicate finalPredicate = ExpressionUtils.allOf(predicates);
-        List<Event> preResultsEventList = eventRepository.findAll(finalPredicate, Pageable.unpaged()).toList();
+        List<Event> events = eventRepository.findAll(finalPredicate, Pageable.unpaged()).toList();
 
-        //только события у которых не исчерпан лимит запросов на участие
-        //Если такой признак пришел, предварительно сходить за заявками
-        if (filter.getOnlyAvailableByRequestLimit() != null && filter.getOnlyAvailableByRequestLimit()) {
-            preResultsEventList.stream().filter((event -> {
-                //если у мероприятия нет ограничения не лимит запросов
-                 if (event.getParticipantLimit() == 0) {
-                     //значит оно должно попасть в результат
-                     return true;
-                 }
-
-                 //значит нужно сходить за кол-во заявок
-                 List<ParticipationRequest> alreadyExistsRequests = findAllRequestsByEventIdsAndStatus(List.of(event.getId()), RequestStatus.CONFIRMED);
-
-                 //если найденное кол-во заявок меньше лимита для события
-                 if (alreadyExistsRequests.size() < event.getParticipantLimit()) {
-                     //значит оно должно попасть в результат
-                     return true;
-                 }
-
-                 //если ничего выше не случилось, значит событие не подходит
-                 return false;
-            }));
-        }
-
-        //преобразовать полученный список Event в список EventShortDto
-        List<EventShortDto> preResultsEventShortList = preResultsEventList
-                .stream()
-                .map(this::mapEventToEventShortDto)
-                .collect(Collectors.toList());
-
+        //преобразовать events в eventsShort, обогатив данными по количеству заявок и кол-ву просмотров
+        List<EventFullDto> eventsFullDto = getFullDtoForAllEvents(events);
 
         //теперь выбрать способ сортировки вывода результатов и сформировать результат с учетом пагинации
         List<EventShortDto> result;
         switch (filter.getSortType()) {
             case VIEWS:
-                result = preResultsEventShortList
+                result = eventsFullDto
                         .stream()
+                        .filter(eventFullDto -> {
+                            if (filter.getOnlyAvailableByRequestLimit() != null && filter.getOnlyAvailableByRequestLimit()) {
+                                return isAvailableByRequestLimit(eventFullDto);
+                            } else {
+                                return true;
+                            }
+                        })
+                        .map(EventMapper::toEventShortDtoFromFull)
                         .sorted(Comparator.comparing(EventShortDto::getViews))
                         .skip(filter.getFrom())
                         .limit(filter.getSize())
@@ -140,8 +120,16 @@ public class EventServiceImpl implements EventService {
                 break;
 
             case EVENT_DATE:
-                result = preResultsEventShortList
+                result = eventsFullDto
                         .stream()
+                        .filter(eventFullDto -> {
+                            if (filter.getOnlyAvailableByRequestLimit() != null && filter.getOnlyAvailableByRequestLimit()) {
+                                return isAvailableByRequestLimit(eventFullDto);
+                            } else {
+                                return true;
+                            }
+                        })
+                        .map(EventMapper::toEventShortDtoFromFull)
                         .sorted(Comparator.comparing(EventShortDto::getEventDate))
                         .skip(filter.getFrom())
                         .limit(filter.getSize())
@@ -149,14 +137,21 @@ public class EventServiceImpl implements EventService {
                 break;
 
             default:
-                result = preResultsEventShortList
+                result = eventsFullDto
                         .stream()
+                        .filter(eventFullDto -> {
+                            if (filter.getOnlyAvailableByRequestLimit() != null && filter.getOnlyAvailableByRequestLimit()) {
+                                return isAvailableByRequestLimit(eventFullDto);
+                            } else {
+                                return true;
+                            }
+                        })
+                        .map(EventMapper::toEventShortDtoFromFull)
                         .sorted(Comparator.comparing(EventShortDto::getId))
                         .skip(filter.getFrom())
                         .limit(filter.getSize())
                         .collect(Collectors.toList());
         }
-
 
         //информацию о том, что по этому эндпоинту был осуществлен и обработан запрос, нужно сохранить в сервисе статистики
         doHitRequest(request);
@@ -195,7 +190,10 @@ public class EventServiceImpl implements EventService {
 
         List<Event> userEvents = eventRepository.findAll(byUserId, pageRequest).toList();
 
-        return userEvents.stream().map(this::mapEventToEventShortDto).collect(Collectors.toList());
+        return getFullDtoForAllEvents(userEvents)
+                .stream()
+                .map(EventMapper::toEventShortDtoFromFull)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -338,7 +336,7 @@ public class EventServiceImpl implements EventService {
         List<Predicate> predicates = new ArrayList<>();
 
         //если пришел список пользователей
-        if (filter.getUsersIds().size() > 0) {
+        if (filter.getUsersIds() != null && filter.getUsersIds().size() > 0) {
             predicates.add(QEvent.event.initiator.id.in(filter.getUsersIds()));
         }
 
@@ -348,16 +346,16 @@ public class EventServiceImpl implements EventService {
         }
 
         //если пришли конкретные категории
-        if (filter.getCategoriesIds().size() > 0) {
+        if (filter.getCategoriesIds() != null && filter.getCategoriesIds().size() > 0) {
             predicates.add(QEvent.event.category.in(getCategoryByIds(filter.getCategoriesIds())));
         }
 
         //если пришла дата начала для выборки
-        if (!filter.getRangeStartEncoded().isBlank()) {
+        if (filter.getRangeStartEncoded() != null && !filter.getRangeStartEncoded().isBlank()) {
             LocalDateTime start = LocalDateTime.parse(URLDecoder.decode(filter.getRangeStartEncoded(), StandardCharsets.UTF_8), Config.formatter);
 
             LocalDateTime end;
-            if (!filter.getRangeEndEncoded().isBlank()) {
+            if (filter.getRangeEndEncoded() != null && !filter.getRangeEndEncoded().isBlank()) {
                 end = LocalDateTime.parse(URLDecoder.decode(filter.getRangeEndEncoded(), StandardCharsets.UTF_8), Config.formatter);
             } else {
                 end = LocalDateTime.now().plusYears(1);
@@ -372,12 +370,7 @@ public class EventServiceImpl implements EventService {
         Predicate finalPredicate = ExpressionUtils.allOf(predicates);
         List<Event> events = eventRepository.findAll(finalPredicate, pageRequest).toList();
 
-        return events.stream().map((event -> {
-            long confirmedRequests = getCountConfirmedRequestsForEvent(event);
-            long views = getCountViewsForEvent(event);
-
-            return EventMapper.toEventFullDto(event, confirmedRequests, views);
-        })).collect(Collectors.toList());
+        return getFullDtoForAllEvents(events);
     }
 
     @Override
@@ -502,19 +495,11 @@ public class EventServiceImpl implements EventService {
     }
 
     private List<ParticipationRequest> findAllRequestsByEventIdsAndStatus(List<Long> eventIds, RequestStatus status) {
-        return requestRepository.findAllById(eventIds)
+        BooleanExpression byEventIds = QParticipationRequest.participationRequest.event.id.in(eventIds);
+        return requestRepository.findAll(byEventIds, Pageable.unpaged())
                 .stream()
                 .filter((participationRequest -> participationRequest.getStatus().equals(status)))
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public EventShortDto mapEventToEventShortDto(Event event) {
-
-        long confirmedRequests = getCountConfirmedRequestsForEvent(event);
-        long views = getCountViewsForEvent(event);
-
-        return EventMapper.toEventShortDto(event, confirmedRequests, views);
     }
 
     private long getCountConfirmedRequestsForEvent(Event event) {
@@ -535,7 +520,7 @@ public class EventServiceImpl implements EventService {
         //сделать запрос
         List<EndpointViewDto> eventStatistics = statsClientService.getEndpointStatsByParams(viewFilter.getQuery());
 
-        return eventStatistics.size();
+        return eventStatistics != null && eventStatistics.size() > 0 ? eventStatistics.get(0).getHits() : 0;
     }
 
     private List<Category> getCategoryByIds(List<Long> ids) {
@@ -545,5 +530,50 @@ public class EventServiceImpl implements EventService {
     private Category findCategoryByIdOrThrowException(Long catId) {
         return categoryRepository.findById(catId)
                 .orElseThrow(() -> new CategoryNotFoundException(catId));
+    }
+
+    private boolean isAvailableByRequestLimit(EventFullDto eventFullDto) {
+        //если у мероприятия нет ограничения не лимит запросов
+        if (eventFullDto.getParticipantLimit() == 0) {
+            //значит оно должно попасть в результат
+            return true;
+        }
+
+        //если найденное кол-во заявок меньше лимита для события
+        if (eventFullDto.getConfirmedRequests() < eventFullDto.getParticipantLimit()) {
+            //значит оно должно попасть в результат
+            return true;
+        }
+
+        //если ничего выше не случилось, значит событие не подходит
+        return false;
+    }
+
+    @Override
+    public List<EventFullDto> getFullDtoForAllEvents(List<Event> events) {
+
+        //из списка событий сформировать список id этих событий, т.к. пригодится дальше
+        List<Long> eventIds = events.stream().map(Event::getId).collect(Collectors.toList());
+
+        //для всех событий получить количество заявок - разом
+        BooleanExpression byEventIds = QParticipationRequest.participationRequest.event.id.in(eventIds);
+        List<ParticipationRequest> requestsForEvents = requestRepository.findAll(byEventIds, Pageable.unpaged())
+                .stream()
+                .filter((participationRequest -> participationRequest.getStatus().equals(RequestStatus.CONFIRMED)))
+                .collect(Collectors.toList());
+
+        //Для всех событий получить количество просмотров
+        //сформировать фильтр
+        EndpointViewParamsHelper viewFilter = EndpointViewParamsHelper.ofOriginalValues(
+                LocalDateTime.now().minusYears(1L),
+                LocalDateTime.now(),
+                eventIds.stream().map(eventId -> String.format(URI_PATTERN, eventId)).collect(Collectors.toList()),
+                Boolean.FALSE);
+
+        //сделать статистики запрос для всех событий разом
+        List<EndpointViewDto> statisticsForEvents = statsClientService.getEndpointStatsByParams(viewFilter.getQuery());
+
+        //преобразовать events в eventsShort, обогатив данными по количеству заявок и кол-ву просмотров
+        return EventMapper.toEventsFullDto(events, requestsForEvents, statisticsForEvents);
     }
 }

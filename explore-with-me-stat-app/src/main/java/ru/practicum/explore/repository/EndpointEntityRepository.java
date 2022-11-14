@@ -17,7 +17,7 @@ public interface EndpointEntityRepository extends JpaRepository<EndpointEntity, 
      * @param uris список uri, для которых нужно сформировать выборку
      * @return результат в виде списка EndpointView
      */
-    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(distinct ee.uri)) "
+    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(distinct ee.ip)) "
             + " from EndpointEntity ee "
             + " where ee.creationDate between ?1 and ?2 "
             + " and ee.uri in (?3) "
@@ -30,7 +30,7 @@ public interface EndpointEntityRepository extends JpaRepository<EndpointEntity, 
      * @param end дата и время конца периода выборки
      * @return результат в виде списка EndpointView
      */
-    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(distinct ee.uri)) "
+    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(distinct ee.ip)) "
             + " from EndpointEntity ee "
             + " where ee.creationDate between ?1 and ?2 "
             + " group by ee.app, ee.uri")
@@ -43,7 +43,7 @@ public interface EndpointEntityRepository extends JpaRepository<EndpointEntity, 
      * @param uris список uri, для которых нужно сформировать выборку
      * @return результат в виде списка EndpointView
      */
-    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(ee.uri)) "
+    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(ee.ip)) "
             + " from EndpointEntity ee "
             + " where ee.creationDate between ?1 and ?2 "
             + " and ee.uri in (?3) "
@@ -56,7 +56,7 @@ public interface EndpointEntityRepository extends JpaRepository<EndpointEntity, 
      * @param end дата и время конца периода выборки
      * @return результат в виде списка EndpointView
      */
-    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(ee.uri)) "
+    @Query("select new ru.practicum.explore.model.EndpointView(ee.app, ee.uri, count(ee.ip)) "
             + " from EndpointEntity ee "
             + " where ee.creationDate between ?1 and ?2 "
             + " group by ee.app, ee.uri")
